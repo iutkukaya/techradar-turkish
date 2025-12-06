@@ -2,8 +2,6 @@
 
 Bu proje, teknolojileri izlemek ve kategorize etmek için geliştirilmiş, etkileşimli ve web tabanlı bir teknoloji radarı uygulamasıdır.
 
-![Radar Görünümü](docs/radar_screenshot.png)
-*(Not: Ekran görüntüsü varsa buraya eklenebilir)*
 
 ## Özellikler
 - **Dinamik Görselleştirme:** D3.js ile oluşturulmuş, sürükle-bırak destekli radar.
