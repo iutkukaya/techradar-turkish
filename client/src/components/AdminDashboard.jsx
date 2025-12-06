@@ -1,0 +1,723 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import useSessionManager from '../hooks/useSessionManager';
+
+const AdminDashboard = () => {
+    useSessionManager();
+    const [activeTab, setActiveTab] = useState('technologies');
+    const [technologies, setTechnologies] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [settings, setSettings] = useState({});
+    const [formData, setFormData] = useState({
+        name: '',
+        description: '',
+        quadrant: 'Araçlar',
+        ring: 'Benimse',
+        attribute: 'Yeni'
+    });
+    const [userFormData, setUserFormData] = useState({
+        username: '',
+        password: '',
+        permissions: []
+    });
+    const [currentUser, setCurrentUser] = useState({ permissions: '' });
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '' });
+
+    // Edit States
+    const [editingTech, setEditingTech] = useState(null);
+    const [showModal, setShowModal] = useState(false);
+    const [editingUser, setEditingUser] = useState(null);
+    const [showUserModal, setShowUserModal] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [passwordChange, setPasswordChange] = useState({ current: '', new: '' });
+
+    const navigate = useNavigate();
+
+    const quadrants = ['Araçlar', 'Diller ve Çerçeveler', 'Platformlar', 'Teknikler'];
+    const rings = ['Benimse', 'Test Et', 'Değerlendir', 'Çık'];
+    const attributes = ['Yeni', 'Halka Atladı', 'Halka Düştü', 'Değişiklik Yok'];
+
+    useEffect(() => {
+        fetchTechnologies();
+        fetchSettings();
+
+        const token = localStorage.getItem('token');
+        if (token) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                setCurrentUser({ permissions: payload.permissions });
+
+                if (payload.permissions === 'ADMIN') {
+                    fetchUsers();
+                }
+            } catch (e) {
+                console.error("Invalid token");
+            }
+        }
+    }, []);
+
+    const fetchTechnologies = async () => {
+        try {
+            const response = await fetch('/api/radar');
+            const data = await response.json();
+            setTechnologies(data);
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        }
+    };
+
+    const fetchUsers = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const response = await fetch('/api/users', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setUsers(data);
+            }
+        } catch (error) {
+            console.error('Error fetching users:', error);
+        }
+    };
+
+    const fetchSettings = () => {
+        fetch('/api/settings')
+            .then(res => res.json())
+            .then(data => setSettings(data))
+            .catch(err => console.error('Error fetching settings:', err));
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        navigate('/login');
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem('token');
+
+        // Prepare data
+        // Prepare data
+        const formData = new FormData(e.target);
+        const dataToSubmit = {
+            ...Object.fromEntries(formData),
+            active: formData.get('active') ? 1 : 0
+        };
+
+        const url = editingTech ? `/api/radar/${editingTech.id}` : '/api/radar';
+        const method = editingTech ? 'PUT' : 'POST';
+
+        try {
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(dataToSubmit)
+            });
+
+            if (response.ok) {
+                fetchTechnologies();
+                setShowModal(false);
+                setEditingTech(null);
+                setFormData({
+                    name: '',
+                    description: '',
+                    quadrant: 'Araçlar',
+                    ring: 'Benimse',
+                    attribute: 'Yeni'
+                });
+            } else {
+                const err = await response.json();
+                alert(`İşlem başarısız: ${err.message || 'Bilinmeyen hata'}`);
+            }
+        } catch (error) {
+            console.error('Error saving technology:', error);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm('Bu kaydı silmek istediğinize emin misiniz?')) return;
+
+        const token = localStorage.getItem('token');
+        try {
+            const response = await fetch(`/api/radar/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                fetchTechnologies();
+            } else {
+                const err = await response.json();
+                alert(`Silme işlemi başarısız: ${err.message || 'Bilinmeyen hata'}`);
+            }
+        } catch (error) {
+            console.error('Error deleting technology:', error);
+        }
+    };
+
+    const handleUserSubmit = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem('token');
+
+        const data = Object.fromEntries(new FormData(e.target));
+        // Handle permissions if using checkboxes in modal, or select
+        // For simplicity in modal we used select, so it's just a string 'ADMIN' or 'Araçlar' etc.
+        // If we want multiple, we need to handle that. Let's stick to the select for now as per previous code.
+
+        const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
+        const method = editingUser ? 'PUT' : 'POST';
+
+        try {
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                fetchUsers();
+                setShowUserModal(false);
+                setEditingUser(null);
+            } else {
+                alert('Kullanıcı işlemi başarısız.');
+            }
+        } catch (error) {
+            console.error('Error saving user:', error);
+        }
+    };
+
+    const handleUserDelete = async (id) => {
+        if (!window.confirm('Bu kullanıcıyı silmek istediğinize emin misiniz?')) return;
+        const token = localStorage.getItem('token');
+        try {
+            const response = await fetch(`/api/users/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                fetchUsers();
+            } else {
+                const err = await response.json();
+                alert(`Kullanıcı silinemedi: ${err.message}`);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const handlePasswordChange = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem('token');
+        try {
+            const response = await fetch('/api/auth/password', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    currentPassword: passwordChange.current,
+                    newPassword: passwordChange.new
+                })
+            });
+
+            const data = await response.json();
+            alert(data.message);
+            if (response.ok) {
+                setPasswordChange({ current: '', new: '' });
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const defaultSettings = {
+        backgroundColor: 'radial-gradient(circle at center, #1e293b 0%, #0f172a 100%)',
+        titleColor: '#38bdf8',
+        listTitleColor: '#38bdf8',
+        listTextColor: '#ffffff',
+        ringColorBenimse: '#22c55e',
+        ringColorTestEt: '#0ea5e9',
+        ringColorDegerlendir: '#f59e0b',
+        ringColorCik: '#ef4444'
+    };
+
+    const handleSettingChange = (key, value) => {
+        setSettings(prev => ({ ...prev, [key]: value }));
+    };
+
+    const saveSettings = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const response = await fetch('/api/settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(settings)
+            });
+            if (response.ok) {
+                alert('Ayarlar kaydedildi!');
+            } else {
+                alert('Ayarlar kaydedilemedi.');
+            }
+        } catch (error) {
+            console.error('Error saving settings:', error);
+        }
+    };
+
+    const handleFileChange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            setSelectedFile(e.target.files[0]);
+        }
+    };
+
+    const handleUpload = async () => {
+        if (!selectedFile) return;
+        const formData = new FormData();
+        formData.append('logo', selectedFile);
+        const token = localStorage.getItem('token');
+        try {
+            const response = await fetch('/api/upload/logo', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            if (response.ok) {
+                alert('Logo başarıyla yüklendi! Değişiklikleri görmek için sayfayı yenileyin.');
+                setSelectedFile(null);
+            } else {
+                alert('Yükleme başarısız oldu.');
+            }
+        } catch (error) {
+            console.error('Error uploading logo:', error);
+        }
+    };
+
+    const isAdmin = currentUser.permissions === 'ADMIN';
+
+    return (
+        <div style={{ padding: '2rem', color: 'white', minHeight: '100vh', background: '#0f172a' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <h1 style={{ fontSize: '2rem', fontWeight: 'bold' }}>Yönetim Paneli</h1>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button onClick={() => navigate('/')} className="btn glass">Radara Git</button>
+                    <button onClick={handleLogout} className="btn glass" style={{ borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>Çıkış Yap</button>
+                </div>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
+                <button
+                    onClick={() => setActiveTab('technologies')}
+                    style={{
+                        padding: '0.5rem 1rem',
+                        background: activeTab === 'technologies' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                        borderRadius: '0.5rem',
+                        color: activeTab === 'technologies' ? 'white' : 'rgba(255,255,255,0.6)',
+                        fontWeight: activeTab === 'technologies' ? 'bold' : 'normal'
+                    }}
+                >
+                    Teknolojiler
+                </button>
+                {isAdmin && (
+                    <>
+                        <button
+                            onClick={() => setActiveTab('users')}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                background: activeTab === 'users' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                borderRadius: '0.5rem',
+                                color: activeTab === 'users' ? 'white' : 'rgba(255,255,255,0.6)',
+                                fontWeight: activeTab === 'users' ? 'bold' : 'normal'
+                            }}
+                        >
+                            Kullanıcılar
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('logo')}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                background: activeTab === 'logo' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                borderRadius: '0.5rem',
+                                color: activeTab === 'logo' ? 'white' : 'rgba(255,255,255,0.6)',
+                                fontWeight: activeTab === 'logo' ? 'bold' : 'normal'
+                            }}
+                        >
+                            Logo Yükle
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('settings')}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                background: activeTab === 'settings' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                borderRadius: '0.5rem',
+                                color: activeTab === 'settings' ? 'white' : 'rgba(255,255,255,0.6)',
+                                fontWeight: activeTab === 'settings' ? 'bold' : 'normal'
+                            }}
+                        >
+                            Ayarlar
+                        </button>
+                    </>
+                )}
+            </div>
+
+            {/* Content */}
+            {activeTab === 'technologies' && (
+                <div className="glass" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Teknoloji Listesi</h2>
+                        <button onClick={() => { setEditingTech(null); setShowModal(true); }} className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>
+                            + Yeni Ekle
+                        </button>
+                    </div>
+
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', textAlign: 'left' }}>
+                                <th style={{ padding: '1rem' }}>İsim</th>
+                                <th style={{ padding: '1rem' }}>Çeyrek</th>
+                                <th style={{ padding: '1rem' }}>Halka</th>
+                                <th style={{ padding: '1rem' }}>Durum</th>
+                                <th style={{ padding: '1rem', textAlign: 'right' }}>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {technologies.map(tech => (
+                                <tr key={tech.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <td style={{ padding: '1rem' }}>{tech.name}</td>
+                                    <td style={{ padding: '1rem' }}>{tech.quadrant}</td>
+                                    <td style={{ padding: '1rem' }}>{tech.ring}</td>
+                                    <td style={{ padding: '1rem' }}>{tech.active ? 'Aktif' : 'Pasif'}</td>
+                                    <td style={{ padding: '1rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                        <button onClick={() => { setEditingTech(tech); setShowModal(true); }} className="btn glass" style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}>Düzenle</button>
+                                        <button onClick={() => handleDelete(tech.id)} className="btn glass" style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem', borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>Sil</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {activeTab === 'users' && isAdmin && (
+                <div className="glass" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Kullanıcı Yönetimi</h2>
+                        <button onClick={() => { setEditingUser(null); setShowUserModal(true); }} className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>
+                            + Yeni Kullanıcı
+                        </button>
+                    </div>
+
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', textAlign: 'left' }}>
+                                <th style={{ padding: '1rem' }}>Kullanıcı Adı</th>
+                                <th style={{ padding: '1rem' }}>Yetkiler</th>
+                                <th style={{ padding: '1rem', textAlign: 'right' }}>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {users.map(user => (
+                                <tr key={user.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <td style={{ padding: '1rem' }}>{user.username}</td>
+                                    <td style={{ padding: '1rem' }}>{user.permissions}</td>
+                                    <td style={{ padding: '1rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                        <button onClick={() => { setEditingUser(user); setShowUserModal(true); }} className="btn glass" style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}>Düzenle</button>
+                                        {user.username !== 'admin' && (
+                                            <button onClick={() => handleUserDelete(user.id)} className="btn glass" style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem', borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>Sil</button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+
+                    {/* Change Own Password Section */}
+                    <div style={{ marginTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '2rem' }}>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>Şifremi Değiştir</h3>
+                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <label>Mevcut Şifre</label>
+                                <input type="password" value={passwordChange.current} onChange={e => setPasswordChange({ ...passwordChange, current: e.target.value })} className="input glass" />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <label>Yeni Şifre</label>
+                                <input type="password" value={passwordChange.new} onChange={e => setPasswordChange({ ...passwordChange, new: e.target.value })} className="input glass" />
+                            </div>
+                            <button onClick={handlePasswordChange} className="btn glass">Güncelle</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'logo' && isAdmin && (
+                <div className="glass" style={{ padding: '1.5rem', borderRadius: '1rem', maxWidth: '500px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>Logo Yükle</h2>
+                    <p style={{ marginBottom: '1rem', color: 'rgba(255,255,255,0.7)' }}>
+                        Radar sayfasında sol üstte görünen logoyu buradan değiştirebilirsiniz.
+                        Yüklenen dosya "mkk_logo.png" olarak kaydedilecek ve mevcut logonun üzerine yazılacaktır.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <input
+                            type="file"
+                            accept="image/png"
+                            onChange={handleFileChange}
+                            className="input glass"
+                            style={{ padding: '0.5rem' }}
+                        />
+                        <button
+                            onClick={handleUpload}
+                            disabled={!selectedFile}
+                            className="btn glass"
+                            style={{
+                                background: selectedFile ? 'rgba(34, 197, 94, 0.2)' : 'transparent',
+                                color: selectedFile ? '#4ade80' : 'inherit',
+                                cursor: selectedFile ? 'pointer' : 'not-allowed'
+                            }}
+                        >
+                            Yükle
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'settings' && isAdmin && (
+                <div className="glass" style={{ padding: '1.5rem', borderRadius: '1rem', maxWidth: '600px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Görünüm Ayarları</h2>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                        {/* General Colors */}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Genel Renkler</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Arka Plan (CSS Gradient)</label>
+                                    <input
+                                        type="text"
+                                        value={settings.backgroundColor || defaultSettings.backgroundColor}
+                                        onChange={e => handleSettingChange('backgroundColor', e.target.value)}
+                                        className="input glass"
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Başlık Rengi</label>
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <input
+                                            type="color"
+                                            value={settings.titleColor || defaultSettings.titleColor}
+                                            onChange={e => handleSettingChange('titleColor', e.target.value)}
+                                            style={{ width: '40px', height: '40px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                        />
+                                        <input
+                                            type="text"
+                                            value={settings.titleColor || defaultSettings.titleColor}
+                                            onChange={e => handleSettingChange('titleColor', e.target.value)}
+                                            className="input glass"
+                                            style={{ flex: 1 }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* List Colors */}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Liste Renkleri</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Liste Başlık Rengi</label>
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <input
+                                            type="color"
+                                            value={settings.listTitleColor || defaultSettings.listTitleColor}
+                                            onChange={e => handleSettingChange('listTitleColor', e.target.value)}
+                                            style={{ width: '40px', height: '40px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                        />
+                                        <input
+                                            type="text"
+                                            value={settings.listTitleColor || defaultSettings.listTitleColor}
+                                            onChange={e => handleSettingChange('listTitleColor', e.target.value)}
+                                            className="input glass"
+                                            style={{ flex: 1 }}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Liste Metin Rengi</label>
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <input
+                                            type="color"
+                                            value={settings.listTextColor || defaultSettings.listTextColor}
+                                            onChange={e => handleSettingChange('listTextColor', e.target.value)}
+                                            style={{ width: '40px', height: '40px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                        />
+                                        <input
+                                            type="text"
+                                            value={settings.listTextColor || defaultSettings.listTextColor}
+                                            onChange={e => handleSettingChange('listTextColor', e.target.value)}
+                                            className="input glass"
+                                            style={{ flex: 1 }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Ring Colors */}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Halka Renkleri</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                {['Benimse', 'Test Et', 'Değerlendir', 'Çık'].map(ring => {
+                                    const key = `ringColor${ring.replace(/\s/g, '')}`; // ringColorBenimse, ringColorTestEt...
+                                    return (
+                                        <div key={key}>
+                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>{ring}</label>
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <input
+                                                    type="color"
+                                                    value={settings[key] || defaultSettings[key]}
+                                                    onChange={e => handleSettingChange(key, e.target.value)}
+                                                    style={{ width: '40px', height: '40px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={settings[key] || defaultSettings[key]}
+                                                    onChange={e => handleSettingChange(key, e.target.value)}
+                                                    className="input glass"
+                                                    style={{ flex: 1 }}
+                                                />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={saveSettings}
+                        className="btn glass"
+                        style={{ marginTop: '2rem', width: '100%', background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', fontWeight: 'bold' }}
+                    >
+                        Ayarları Kaydet
+                    </button>
+                </div>
+            )}
+
+            {/* Modals */}
+            {showModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+                    <div className="glass" style={{ padding: '2rem', borderRadius: '1rem', width: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>{editingTech ? 'Teknoloji Düzenle' : 'Yeni Teknoloji Ekle'}</h2>
+                        <form onSubmit={handleSubmit}>
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>İsim</label>
+                                <input name="name" defaultValue={editingTech?.name} required className="input glass" style={{ width: '100%' }} />
+                            </div>
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Açıklama</label>
+                                <textarea name="description" defaultValue={editingTech?.description} className="input glass" style={{ width: '100%', minHeight: '100px' }} />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Çeyrek</label>
+                                    <select name="quadrant" defaultValue={editingTech?.quadrant || 'Araçlar'} className="input glass" style={{ width: '100%' }}>
+                                        <option value="Araçlar">Araçlar</option>
+                                        <option value="Diller ve Çerçeveler">Diller ve Çerçeveler</option>
+                                        <option value="Platformlar">Platformlar</option>
+                                        <option value="Teknikler">Teknikler</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Halka</label>
+                                    <select name="ring" defaultValue={editingTech?.ring || 'Benimse'} className="input glass" style={{ width: '100%' }}>
+                                        <option value="Benimse">Benimse</option>
+                                        <option value="Test Et">Test Et</option>
+                                        <option value="Değerlendir">Değerlendir</option>
+                                        <option value="Çık">Çık</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Öznitelik</label>
+                                <select name="attribute" defaultValue={editingTech?.attribute || ''} className="input glass" style={{ width: '100%' }}>
+                                    <option value="">(Yok)</option>
+                                    <option value="Yeni">Yeni</option>
+                                    <option value="Halka Atladı">Halka Atladı</option>
+                                    <option value="Halka Düştü">Halka Düştü</option>
+                                </select>
+                            </div>
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                    <input type="checkbox" name="active" defaultChecked={editingTech ? editingTech.active : true} />
+                                    <span>Aktif</span>
+                                </label>
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                                <button type="button" onClick={() => setShowModal(false)} className="btn glass" style={{ borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>İptal</button>
+                                <button type="submit" className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>Kaydet</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {showUserModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+                    <div className="glass" style={{ padding: '2rem', borderRadius: '1rem', width: '400px' }}>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>{editingUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}</h2>
+                        <form onSubmit={handleUserSubmit}>
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Kullanıcı Adı</label>
+                                <input name="username" defaultValue={editingUser?.username} required className="input glass" style={{ width: '100%' }} />
+                            </div>
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Şifre {editingUser && '(Değiştirmek için doldurun)'}</label>
+                                <input name="password" type="password" required={!editingUser} className="input glass" style={{ width: '100%' }} />
+                            </div>
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Yetkiler</label>
+                                <select
+                                    name="permissions"
+                                    defaultValue={editingUser?.permissions || 'ADMIN'}
+                                    className="input glass"
+                                    style={{ width: '100%', opacity: editingUser?.username === 'admin' ? 0.5 : 1 }}
+                                    disabled={editingUser?.username === 'admin'}
+                                >
+                                    <option value="ADMIN">ADMIN (Tam Yetki)</option>
+                                    <option value="Araçlar">Sadece Araçlar</option>
+                                    <option value="Diller ve Çerçeveler">Sadece Diller</option>
+                                    <option value="Platformlar">Sadece Platformlar</option>
+                                    <option value="Teknikler">Sadece Teknikler</option>
+                                </select>
+                                {editingUser?.username === 'admin' && (
+                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                                        Varsayılan admin kullanıcısının yetkileri değiştirilemez.
+                                    </p>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                                <button type="button" onClick={() => setShowUserModal(false)} className="btn glass" style={{ borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>İptal</button>
+                                <button type="submit" className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>Kaydet</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default AdminDashboard;
