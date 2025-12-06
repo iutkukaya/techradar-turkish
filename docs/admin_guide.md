@@ -11,7 +11,7 @@ To access the admin panel, navigate to the main page (`http://localhost:3000`) a
 
 **Default Credentials:**
 - **Username:** `admin`
-- **Password:** `admin123`
+- **Password:** `admin`
 *(Note: Please change this password immediately after your first login)*
 
 ## 2. Dashboard Overview

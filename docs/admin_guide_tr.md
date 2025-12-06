@@ -11,7 +11,7 @@ Yönetim paneline erişmek için ana sayfaya (`http://localhost:3000`) gidin ve 
 
 **Varsayılan Bilgiler:**
 - **Kullanıcı Adı:** `admin`
-- **Şifre:** `admin123`
+- **Şifre:** `admin`
 *(Not: Lütfen ilk girişinizden sonra bu şifreyi hemen değiştirin)*
 
 ## 2. Panele Genel Bakış
