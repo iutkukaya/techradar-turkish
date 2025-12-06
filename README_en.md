@@ -2,8 +2,6 @@
 
 This project is an interactive, web-based technology radar application designed to track and categorize technologies.
 
-![Radar View](docs/radar_screenshot.png)
-*(Note: Screenshot can be added here)*
 
 ## Features
 - **Dynamic Visualization:** D3.js-based radar with drag-and-drop support.
