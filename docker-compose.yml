@@ -1,0 +1,16 @@
+services:
+  tech-radar:
+    build: .
+    image: turkish-tech-radar:latest
+    container_name: individual-tech-radar
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount the database file for persistence
+      # Note: For the first run, you might want to let the app create the DB, then map it.
+      # Or map a directory containing the db.
+      - ./data:/app/data
+    environment:
+      - DB_PATH=/app/data/radar.db
+      - PORT=3000

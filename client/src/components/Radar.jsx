@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 
-const Radar = ({ data, width, height, onHover, onUpdate, isDraggable, colors }) => {
+const Radar = ({ data, width, height, onHover, onUpdate, isDraggable, colors, settings }) => {
     const svgRef = useRef();
     const nodesRef = useRef([]); // Store nodes to persist positions
     const onHoverRef = useRef(onHover); // Store callback to avoid effect re-run
@@ -39,8 +39,18 @@ const Radar = ({ data, width, height, onHover, onUpdate, isDraggable, colors }) 
         const maxRadius = Math.min(width, height) / 2 - 20;
 
         // Configuration
-        const rings = ['Benimse', 'Test Et', 'Değerlendir', 'Çık'];
-        const quadrants = ['Araçlar', 'Diller ve Çerçeveler', 'Platformlar', 'Teknikler'];
+        const rings = [
+            settings?.ring1 || 'Benimse',
+            settings?.ring2 || 'Test Et',
+            settings?.ring3 || 'Değerlendir',
+            settings?.ring4 || 'Çık'
+        ];
+        const quadrants = [
+            settings?.quadrant1 || 'Araçlar',
+            settings?.quadrant2 || 'Diller ve Çerçeveler',
+            settings?.quadrant3 || 'Platformlar',
+            settings?.quadrant4 || 'Teknikler'
+        ];
 
         // Ring Radii
         const ringRadii = [maxRadius * 0.4, maxRadius * 0.65, maxRadius * 0.85, maxRadius];
@@ -89,9 +99,26 @@ const Radar = ({ data, width, height, onHover, onUpdate, isDraggable, colors }) 
 
         // Helper to get coordinates (Ideal Position)
         // Now deterministic based on params
+        // Helper to find index checking both current and legacy names
+        const getQuadrantIndex = (name) => {
+            const idx = quadrants.indexOf(name);
+            if (idx !== -1) return idx;
+            const defaults = ['Araçlar', 'Diller ve Çerçeveler', 'Platformlar', 'Teknikler'];
+            return defaults.indexOf(name);
+        };
+
+        const getRingIndex = (name) => {
+            const idx = rings.indexOf(name);
+            if (idx !== -1) return idx;
+            const defaults = ['Benimse', 'Test Et', 'Değerlendir', 'Çık'];
+            return defaults.indexOf(name);
+        };
+
+        // Helper to get coordinates (Ideal Position)
+        // Now deterministic based on params
         const getCoordinates = (quadrant, ring, angleParam, radiusParam) => {
-            const qIndex = quadrants.indexOf(quadrant);
-            const rIndex = rings.indexOf(ring);
+            const qIndex = getQuadrantIndex(quadrant);
+            const rIndex = getRingIndex(ring);
 
             if (qIndex === -1 || rIndex === -1) return { x: centerX, y: centerY };
 
@@ -133,8 +160,13 @@ const Radar = ({ data, width, height, onHover, onUpdate, isDraggable, colors }) 
 
             if (angle < 0) angle += 2 * Math.PI;
 
-            const qIndex = quadrants.indexOf(d.quadrant);
-            const rIndex = rings.indexOf(d.ring);
+            if (angle < 0) angle += 2 * Math.PI;
+
+            const qIndex = getQuadrantIndex(d.quadrant);
+            const rIndex = getRingIndex(d.ring);
+
+            // Fallback to center if invalid (shouldn't happen with valid data)
+            if (qIndex === -1 || rIndex === -1) return;
 
             const innerR = rIndex === 0 ? 0 : ringRadii[rIndex - 1];
             const outerR = ringRadii[rIndex];
@@ -260,8 +292,12 @@ const Radar = ({ data, width, height, onHover, onUpdate, isDraggable, colors }) 
                 let radius = Math.sqrt(dx * dx + dy * dy);
                 if (angle < 0) angle += 2 * Math.PI;
 
-                const qIndex = quadrants.indexOf(d.quadrant);
-                const rIndex = rings.indexOf(d.ring);
+                if (angle < 0) angle += 2 * Math.PI;
+
+                const qIndex = getQuadrantIndex(d.quadrant);
+                const rIndex = getRingIndex(d.ring);
+                if (qIndex === -1 || rIndex === -1) return; // Should not happen
+
                 const innerR = rIndex === 0 ? 0 : ringRadii[rIndex - 1];
                 const outerR = ringRadii[rIndex];
 
@@ -339,13 +375,18 @@ const Radar = ({ data, width, height, onHover, onUpdate, isDraggable, colors }) 
                 .attr("stroke-width", 1);
 
             // Attribute Indicators
-            if (item.attribute === 'Yeni') {
+            const s1 = settings?.status1 || 'Yeni';
+            const s2 = settings?.status2 || 'Halka Atladı';
+            const s3 = settings?.status3 || 'Halka Düştü';
+            // s4 is 'Değişiklik Yok' - usually no icon
+
+            if (item.attribute === s1) {
                 g.append("circle")
                     .attr("r", 9)
                     .attr("fill", "none")
                     .attr("stroke", "white")
                     .attr("stroke-width", 1);
-            } else if (item.attribute === 'Halka Atladı') {
+            } else if (item.attribute === s2) {
                 const arc = d3.arc()
                     .innerRadius(8)
                     .outerRadius(9)
@@ -355,7 +396,7 @@ const Radar = ({ data, width, height, onHover, onUpdate, isDraggable, colors }) 
                 g.append("path")
                     .attr("d", arc)
                     .attr("fill", "white");
-            } else if (item.attribute === 'Halka Düştü') {
+            } else if (item.attribute === s3) {
                 const arc = d3.arc()
                     .innerRadius(8)
                     .outerRadius(9)
@@ -376,7 +417,7 @@ const Radar = ({ data, width, height, onHover, onUpdate, isDraggable, colors }) 
                 .text(item.name.length > 10 ? item.name.substring(0, 8) + '..' : item.name);
         });
 
-    }, [data, width, height, colors]);
+    }, [data, width, height, colors, settings]);
 
     return <svg ref={svgRef} width={width} height={height} style={{ touchAction: 'none' }} />;
 };

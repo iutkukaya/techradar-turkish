@@ -77,6 +77,40 @@ const RadarView = () => {
         settings.ringColorCik || '#ef4444'
     ];
 
+    const rings = [
+        settings.ring1 || 'Benimse',
+        settings.ring2 || 'Test Et',
+        settings.ring3 || 'Değerlendir',
+        settings.ring4 || 'Çık'
+    ];
+    const quadrants = [
+        settings.quadrant1 || 'Araçlar',
+        settings.quadrant2 || 'Diller ve Çerçeveler',
+        settings.quadrant3 || 'Platformlar',
+        settings.quadrant4 || 'Teknikler'
+    ];
+
+    const quadrantMap = {
+        'Araçlar': settings.quadrant1 || 'Araçlar',
+        'Diller ve Çerçeveler': settings.quadrant2 || 'Diller ve Çerçeveler',
+        'Platformlar': settings.quadrant3 || 'Platformlar',
+        'Teknikler': settings.quadrant4 || 'Teknikler'
+    };
+
+    const ringMap = {
+        'Benimse': settings.ring1 || 'Benimse',
+        'Test Et': settings.ring2 || 'Test Et',
+        'Değerlendir': settings.ring3 || 'Değerlendir',
+        'Çık': settings.ring4 || 'Çık'
+    };
+
+    const statusMap = {
+        'Yeni': settings.status1 || 'Yeni',
+        'Halka Atladı': settings.status2 || 'Halka Atladı',
+        'Halka Düştü': settings.status3 || 'Halka Düştü',
+        'Değişiklik Yok': settings.status4 || 'Değişiklik Yok'
+    };
+
     return (
         <div style={{
             width: '100vw',
@@ -130,26 +164,31 @@ const RadarView = () => {
                     onUpdate={handleUpdate}
                     isDraggable={isLoggedIn}
                     colors={ringColors}
+                    settings={settings}
                 />
             </div>
 
             {/* Helper for rendering lists */}
             {(() => {
-                const rings = ['Benimse', 'Test Et', 'Değerlendir', 'Çık'];
+                const renderList = (standardQuadrantName, alignRight = false) => {
+                    const displayQuadrantName = quadrantMap[standardQuadrantName];
 
-                const renderList = (quadrantName, alignRight = false) => {
                     // Filter and Sort by Ring
                     const items = technologies
-                        .filter(t => t.quadrant === quadrantName)
-                        .sort((a, b) => rings.indexOf(a.ring) - rings.indexOf(b.ring));
+                        .filter(t => t.quadrant === standardQuadrantName)
+                        .sort((a, b) => {
+                            const r1 = ['Benimse', 'Test Et', 'Değerlendir', 'Çık'].indexOf(a.ring);
+                            const r2 = ['Benimse', 'Test Et', 'Değerlendir', 'Çık'].indexOf(b.ring);
+                            return r1 - r2;
+                        });
 
                     return (
                         <div className="glass" style={{
                             position: 'absolute',
-                            top: quadrantName === 'Araçlar' || quadrantName === 'Diller ve Çerçeveler' ? '12%' : 'auto',
-                            bottom: quadrantName === 'Teknikler' || quadrantName === 'Platformlar' ? '12%' : 'auto',
-                            left: quadrantName === 'Araçlar' || quadrantName === 'Teknikler' ? '16%' : 'auto',
-                            right: quadrantName === 'Diller ve Çerçeveler' || quadrantName === 'Platformlar' ? '16%' : 'auto',
+                            top: standardQuadrantName === 'Araçlar' || standardQuadrantName === 'Diller ve Çerçeveler' ? '12%' : 'auto',
+                            bottom: standardQuadrantName === 'Teknikler' || standardQuadrantName === 'Platformlar' ? '12%' : 'auto',
+                            left: standardQuadrantName === 'Araçlar' || standardQuadrantName === 'Teknikler' ? '16%' : 'auto',
+                            right: standardQuadrantName === 'Diller ve Çerçeveler' || standardQuadrantName === 'Platformlar' ? '16%' : 'auto',
                             width: '220px', // Reduced width
                             maxHeight: '35vh',
                             overflowY: 'auto',
@@ -157,7 +196,7 @@ const RadarView = () => {
                             borderRadius: '0.5rem',
                             zIndex: 5
                         }}>
-                            <h3 style={{ color: settings.listTitleColor || 'var(--accent-primary)', marginBottom: '0.5rem', fontSize: '1rem', textAlign: alignRight ? 'right' : 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.25rem' }}>{quadrantName}</h3>
+                            <h3 style={{ color: settings.listTitleColor || 'var(--accent-primary)', marginBottom: '0.5rem', fontSize: '1rem', textAlign: alignRight ? 'right' : 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.25rem' }}>{displayQuadrantName}</h3>
 
                             <ul style={{ listStyle: 'none', fontSize: '0.75rem' }}> {/* Reduced font size */}
                                 {items.map(tech => (
@@ -165,11 +204,11 @@ const RadarView = () => {
                                         <span style={{ fontWeight: '500', color: settings.listTextColor || 'white' }}>{tech.name}</span>
                                         <span style={{
                                             fontSize: '0.7rem',
-                                            color: ringColors[rings.indexOf(tech.ring)], // Use ring color
+                                            color: ringColors[['Benimse', 'Test Et', 'Değerlendir', 'Çık'].indexOf(tech.ring)], // Use ring color
                                             opacity: 0.9,
                                             marginLeft: alignRight ? 0 : '0.5rem',
                                             marginRight: alignRight ? '0.5rem' : 0
-                                        }}>{tech.ring}</span>
+                                        }}>{ringMap[tech.ring]}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -230,21 +269,27 @@ const RadarView = () => {
                                     <circle cx="10" cy="10" r="6" fill="gray" />
                                     <circle cx="10" cy="10" r="9" fill="none" stroke="white" strokeWidth="2" />
                                 </svg>
-                                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: '500' }}>Yeni</span>
+                                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: '500' }}>{statusMap['Yeni']}</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <svg width="16" height="16" viewBox="0 0 20 20" style={{ overflow: 'visible' }}>
                                     <circle cx="10" cy="10" r="6" fill="gray" />
                                     <path d="M 1 10 A 9 9 0 0 1 19 10" fill="none" stroke="white" strokeWidth="2" />
                                 </svg>
-                                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: '500' }}>Halka Atladı</span>
+                                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: '500' }}>{statusMap['Halka Atladı']}</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <svg width="16" height="16" viewBox="0 0 20 20" style={{ overflow: 'visible' }}>
                                     <circle cx="10" cy="10" r="6" fill="gray" />
                                     <path d="M 1 10 A 9 9 0 0 0 19 10" fill="none" stroke="white" strokeWidth="2" />
                                 </svg>
-                                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: '500' }}>Halka Düştü</span>
+                                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: '500' }}>{statusMap['Halka Düştü']}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <svg width="16" height="16" viewBox="0 0 20 20" style={{ overflow: 'visible' }}>
+                                    <circle cx="10" cy="10" r="6" fill="gray" />
+                                </svg>
+                                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: '500' }}>{statusMap['Değişiklik Yok']}</span>
                             </div>
                         </div>
                     </>
@@ -255,23 +300,26 @@ const RadarView = () => {
                 <div className="glass" style={{
                     position: 'absolute',
                     left: hoveredItem.x + 20,
-                    top: hoveredItem.y + 20,
+                    top: hoveredItem.y > window.innerHeight - 200 ? 'auto' : hoveredItem.y + 20,
+                    bottom: hoveredItem.y > window.innerHeight - 200 ? (window.innerHeight - hoveredItem.y + 20) : 'auto',
                     padding: '1rem',
                     borderRadius: '0.5rem',
                     maxWidth: '300px',
                     pointerEvents: 'none',
                     zIndex: 20,
                     boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word'
                 }}>
                     <h3 style={{ color: 'var(--accent-primary)', marginBottom: '0.5rem' }}>{hoveredItem.name}</h3>
                     <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                        {hoveredItem.quadrant} / {hoveredItem.ring}
+                        {(quadrantMap && quadrantMap[hoveredItem.quadrant]) || hoveredItem.quadrant} / {(ringMap && ringMap[hoveredItem.ring]) || hoveredItem.ring}
                     </div>
                     <p style={{ fontSize: '0.9rem' }}>{hoveredItem.description}</p>
                     {hoveredItem.attribute && (
                         <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-secondary)' }}>
-                            {hoveredItem.attribute}
+                            {(statusMap && statusMap[hoveredItem.attribute]) || hoveredItem.attribute}
                         </div>
                     )}
                 </div>

@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 
 const isPkg = typeof process.pkg !== 'undefined';
 const dbDir = isPkg ? path.dirname(process.execPath) : __dirname;
-const dbPath = path.join(dbDir, 'radar.db');
+const dbPath = process.env.DB_PATH || path.join(dbDir, 'radar.db');
 
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
@@ -114,7 +114,22 @@ const initializeSettings = () => {
         { key: 'ringColorBenimse', value: '#22c55e' },
         { key: 'ringColorTestEt', value: '#0ea5e9' },
         { key: 'ringColorDegerlendir', value: '#f59e0b' },
-        { key: 'ringColorCik', value: '#ef4444' }
+        { key: 'ringColorCik', value: '#ef4444' },
+        // Quadrant Names
+        { key: 'quadrant1', value: 'Araçlar' },
+        { key: 'quadrant2', value: 'Diller ve Çerçeveler' },
+        { key: 'quadrant3', value: 'Platformlar' },
+        { key: 'quadrant4', value: 'Teknikler' },
+        // Ring Names
+        { key: 'ring1', value: 'Benimse' },
+        { key: 'ring2', value: 'Test Et' },
+        { key: 'ring3', value: 'Değerlendir' },
+        { key: 'ring4', value: 'Çık' },
+        // Status Attribute Names
+        { key: 'status1', value: 'Yeni' },
+        { key: 'status2', value: 'Halka Atladı' },
+        { key: 'status3', value: 'Halka Düştü' },
+        { key: 'status4', value: 'Değişiklik Yok' }
       ];
 
       const stmt = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)");

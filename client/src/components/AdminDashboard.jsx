@@ -34,9 +34,24 @@ const AdminDashboard = () => {
 
     const navigate = useNavigate();
 
-    const quadrants = ['Araçlar', 'Diller ve Çerçeveler', 'Platformlar', 'Teknikler'];
-    const rings = ['Benimse', 'Test Et', 'Değerlendir', 'Çık'];
-    const attributes = ['Yeni', 'Halka Atladı', 'Halka Düştü', 'Değişiklik Yok'];
+    const quadrants = [
+        settings.quadrant1 || 'Araçlar',
+        settings.quadrant2 || 'Diller ve Çerçeveler',
+        settings.quadrant3 || 'Platformlar',
+        settings.quadrant4 || 'Teknikler'
+    ];
+    const rings = [
+        settings.ring1 || 'Benimse',
+        settings.ring2 || 'Test Et',
+        settings.ring3 || 'Değerlendir',
+        settings.ring4 || 'Çık'
+    ];
+    const attributes = [
+        settings.status1 || 'Yeni',
+        settings.status2 || 'Halka Atladı',
+        settings.status3 || 'Halka Düştü',
+        settings.status4 || 'Değişiklik Yok'
+    ];
 
     useEffect(() => {
         fetchTechnologies();
@@ -604,6 +619,61 @@ const AdminDashboard = () => {
                                 })}
                             </div>
                         </div>
+
+
+                        {/* Custom Names */}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>İsimlendirmeler</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Çeyrek İsimleri</label>
+                                    {[1, 2, 3, 4].map(i => (
+                                        <div key={`quadrant${i}`} style={{ marginBottom: '0.5rem' }}>
+                                            <input
+                                                type="text"
+                                                placeholder={`Çeyrek ${i}`}
+                                                value={settings[`quadrant${i}`] || ''}
+                                                onChange={e => handleSettingChange(`quadrant${i}`, e.target.value)}
+                                                className="input glass"
+                                                style={{ width: '100%' }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Halka İsimleri</label>
+                                    {[1, 2, 3, 4].map(i => (
+                                        <div key={`ring${i}`} style={{ marginBottom: '0.5rem' }}>
+                                            <input
+                                                type="text"
+                                                placeholder={`Halka ${i}`}
+                                                value={settings[`ring${i}`] || ''}
+                                                onChange={e => handleSettingChange(`ring${i}`, e.target.value)}
+                                                className="input glass"
+                                                style={{ width: '100%' }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Durum İsimleri</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        {[1, 2, 3, 4].map(i => (
+                                            <div key={`status${i}`}>
+                                                <input
+                                                    type="text"
+                                                    placeholder={`Durum ${i} (${i === 4 ? 'Değişiklik Yok' : ''})`}
+                                                    value={settings[`status${i}`] || ''}
+                                                    onChange={e => handleSettingChange(`status${i}`, e.target.value)}
+                                                    className="input glass"
+                                                    style={{ width: '100%' }}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <button
@@ -614,109 +684,106 @@ const AdminDashboard = () => {
                         Ayarları Kaydet
                     </button>
                 </div>
-            )}
+            )
+            }
 
             {/* Modals */}
-            {showModal && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
-                    <div className="glass" style={{ padding: '2rem', borderRadius: '1rem', width: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>{editingTech ? 'Teknoloji Düzenle' : 'Yeni Teknoloji Ekle'}</h2>
-                        <form onSubmit={handleSubmit}>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>İsim</label>
-                                <input name="name" defaultValue={editingTech?.name} required className="input glass" style={{ width: '100%' }} />
-                            </div>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Açıklama</label>
-                                <textarea name="description" defaultValue={editingTech?.description} className="input glass" style={{ width: '100%', minHeight: '100px' }} />
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Çeyrek</label>
-                                    <select name="quadrant" defaultValue={editingTech?.quadrant || 'Araçlar'} className="input glass" style={{ width: '100%' }}>
-                                        <option value="Araçlar">Araçlar</option>
-                                        <option value="Diller ve Çerçeveler">Diller ve Çerçeveler</option>
-                                        <option value="Platformlar">Platformlar</option>
-                                        <option value="Teknikler">Teknikler</option>
+            {
+                showModal && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+                        <div className="glass" style={{ padding: '2rem', borderRadius: '1rem', width: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>{editingTech ? 'Teknoloji Düzenle' : 'Yeni Teknoloji Ekle'}</h2>
+                            <form onSubmit={handleSubmit}>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>İsim</label>
+                                    <input name="name" defaultValue={editingTech?.name} required className="input glass" style={{ width: '100%' }} />
+                                </div>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Açıklama</label>
+                                    <textarea name="description" defaultValue={editingTech?.description} className="input glass" style={{ width: '100%', minHeight: '100px' }} />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Çeyrek</label>
+                                        <select name="quadrant" defaultValue={editingTech?.quadrant || quadrants[0]} className="input glass" style={{ width: '100%' }}>
+                                            {quadrants.map(q => <option key={q} value={q}>{q}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Halka</label>
+                                        <select name="ring" defaultValue={editingTech?.ring || rings[0]} className="input glass" style={{ width: '100%' }}>
+                                            {rings.map(r => <option key={r} value={r}>{r}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Öznitelik</label>
+                                    <select name="attribute" defaultValue={editingTech?.attribute || ''} className="input glass" style={{ width: '100%' }}>
+                                        <option value="">(Yok)</option>
+                                        {attributes.map(a => <option key={a} value={a}>{a}</option>)}
                                     </select>
                                 </div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Halka</label>
-                                    <select name="ring" defaultValue={editingTech?.ring || 'Benimse'} className="input glass" style={{ width: '100%' }}>
-                                        <option value="Benimse">Benimse</option>
-                                        <option value="Test Et">Test Et</option>
-                                        <option value="Değerlendir">Değerlendir</option>
-                                        <option value="Çık">Çık</option>
-                                    </select>
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                        <input type="checkbox" name="active" defaultChecked={editingTech ? editingTech.active : true} />
+                                        <span>Aktif</span>
+                                    </label>
                                 </div>
-                            </div>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Öznitelik</label>
-                                <select name="attribute" defaultValue={editingTech?.attribute || ''} className="input glass" style={{ width: '100%' }}>
-                                    <option value="">(Yok)</option>
-                                    <option value="Yeni">Yeni</option>
-                                    <option value="Halka Atladı">Halka Atladı</option>
-                                    <option value="Halka Düştü">Halka Düştü</option>
-                                </select>
-                            </div>
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                                    <input type="checkbox" name="active" defaultChecked={editingTech ? editingTech.active : true} />
-                                    <span>Aktif</span>
-                                </label>
-                            </div>
-                            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                                <button type="button" onClick={() => setShowModal(false)} className="btn glass" style={{ borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>İptal</button>
-                                <button type="submit" className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>Kaydet</button>
-                            </div>
-                        </form>
+                                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                                    <button type="button" onClick={() => setShowModal(false)} className="btn glass" style={{ borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>İptal</button>
+                                    <button type="submit" className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>Kaydet</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
-            {showUserModal && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
-                    <div className="glass" style={{ padding: '2rem', borderRadius: '1rem', width: '400px' }}>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>{editingUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}</h2>
-                        <form onSubmit={handleUserSubmit}>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Kullanıcı Adı</label>
-                                <input name="username" defaultValue={editingUser?.username} required className="input glass" style={{ width: '100%' }} />
-                            </div>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Şifre {editingUser && '(Değiştirmek için doldurun)'}</label>
-                                <input name="password" type="password" required={!editingUser} className="input glass" style={{ width: '100%' }} />
-                            </div>
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem' }}>Yetkiler</label>
-                                <select
-                                    name="permissions"
-                                    defaultValue={editingUser?.permissions || 'ADMIN'}
-                                    className="input glass"
-                                    style={{ width: '100%', opacity: editingUser?.username === 'admin' ? 0.5 : 1 }}
-                                    disabled={editingUser?.username === 'admin'}
-                                >
-                                    <option value="ADMIN">ADMIN (Tam Yetki)</option>
-                                    <option value="Araçlar">Sadece Araçlar</option>
-                                    <option value="Diller ve Çerçeveler">Sadece Diller</option>
-                                    <option value="Platformlar">Sadece Platformlar</option>
-                                    <option value="Teknikler">Sadece Teknikler</option>
-                                </select>
-                                {editingUser?.username === 'admin' && (
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                                        Varsayılan admin kullanıcısının yetkileri değiştirilemez.
-                                    </p>
-                                )}
-                            </div>
-                            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                                <button type="button" onClick={() => setShowUserModal(false)} className="btn glass" style={{ borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>İptal</button>
-                                <button type="submit" className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>Kaydet</button>
-                            </div>
-                        </form>
+            {
+                showUserModal && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+                        <div className="glass" style={{ padding: '2rem', borderRadius: '1rem', width: '400px' }}>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>{editingUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}</h2>
+                            <form onSubmit={handleUserSubmit}>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Kullanıcı Adı</label>
+                                    <input name="username" defaultValue={editingUser?.username} required className="input glass" style={{ width: '100%' }} />
+                                </div>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Şifre {editingUser && '(Değiştirmek için doldurun)'}</label>
+                                    <input name="password" type="password" required={!editingUser} className="input glass" style={{ width: '100%' }} />
+                                </div>
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Yetkiler</label>
+                                    <select
+                                        name="permissions"
+                                        defaultValue={editingUser?.permissions || 'ADMIN'}
+                                        className="input glass"
+                                        style={{ width: '100%', opacity: editingUser?.username === 'admin' ? 0.5 : 1 }}
+                                        disabled={editingUser?.username === 'admin'}
+                                    >
+                                        <option value="ADMIN">ADMIN (Tam Yetki)</option>
+                                        <option value="Araçlar">Sadece Araçlar</option>
+                                        <option value="Diller ve Çerçeveler">Sadece Diller</option>
+                                        <option value="Platformlar">Sadece Platformlar</option>
+                                        <option value="Teknikler">Sadece Teknikler</option>
+                                    </select>
+                                    {editingUser?.username === 'admin' && (
+                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                                            Varsayılan admin kullanıcısının yetkileri değiştirilemez.
+                                        </p>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                                    <button type="button" onClick={() => setShowUserModal(false)} className="btn glass" style={{ borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>İptal</button>
+                                    <button type="submit" className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>Kaydet</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

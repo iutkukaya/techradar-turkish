@@ -63,6 +63,7 @@ Panel dört ana sekmeye ayrılmıştır:
 - **Genel Renkler:** Arka plan gradyanını ve ana başlık rengini değiştirin.
 - **Liste Renkleri:** Köşelerdeki listelerin rengini değiştirin.
 - **Halka Renkleri:** Her bir halka için renkleri değiştirin (Benimse, Test Et, vb.).
+- **İsimlendirmeler:** Çeyreklerin, Halkaların ve Durumların isimlerini değiştirin (örn. "Araçlar" yerine "Tools").
 - Değişiklikleri uygulamak için **"Ayarları Kaydet"** butonuna tıklayın.
 
 ## 6. Sürükle & Bırak ile Konumlandırma

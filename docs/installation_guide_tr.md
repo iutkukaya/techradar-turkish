@@ -29,9 +29,20 @@ Uygulamayı başka bir bilgisayara veya sunucuya taşımak için:
 2.  Hedef bilgisayara kopyalayın ve zipten çıkarın.
 3.  `start.bat` ile çalıştırın.
 
+## 5. Linux ve Docker ile Çalıştırma
+Bu uygulama Linux sistemlerinde çalışmak üzere Docker desteği sunar.
+
+1.  Temel kurulum (Docker ve Docker Compose) yapın.
+2.  Proje dizininde terminali açın.
+3.  Şu komutu çalıştırın:
+    ```bash
+    docker-compose up -d --build
+    ```
+4.  Detaylı bilgi için **`docs/LINUX_DEPLOYMENT_TR.md`** dosyasına bakın.
+
 **Not:** Eğer mevcut verilerinizi (kullanıcılar, teknolojiler) korumak istiyorsanız, `radar.db` dosyasını da kopyaladığınızdan emin olun.
 
-## 5. Sorun Giderme
+## 6. Sorun Giderme
 **Soru: Tarayıcı açılıyor ama "Bağlantı Reddedildi" veya hata görüyorum.**
 - `start.bat` dosyasını çalıştırdığınızda açılan **siyah sunucu penceresini** kontrol edin.
 - Eğer pencerede kırmızı hata mesajları varsa, bu hataları not alın.
@@ -43,7 +54,7 @@ Uygulamayı başka bir bilgisayara veya sunucuya taşımak için:
 **Soru: Veritabanı hataları alıyorum.**
 - Uygulamanın bulunduğu klasöre "Yazma İzni" (Write Permission) olduğundan emin olun. Uygulama `radar.db` dosyasını oluşturmak ve güncellemek için yazma iznine ihtiyaç duyar.
 
-## 6. Sıkça Sorulan Sorular (SSS)
+## 7. Sıkça Sorulan Sorular (SSS)
 
 **Soru: Bu işlem bilgisayarıma bir kurulum yapıyor mu?**
 Hayır. Bu bir "kurulum" değildir. `dist` klasörü tamamen **taşınabilirdir**. Klasörü USB belleğe atıp başka bir Windows bilgisayara takarak doğrudan çalıştırabilirsiniz. Bilgisayarın kayıt defterine veya sistem dosyalarına hiçbir şey yazmaz.
