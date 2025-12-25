@@ -33,6 +33,12 @@ function initializeTables() {
             if (!hasPermissions) {
               db.run("ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT 'READ_ONLY'");
             }
+
+            // Migration: Check for source column (LDAP feature)
+            const hasSource = rows.some(row => row.name === 'source');
+            if (!hasSource) {
+              db.run("ALTER TABLE users ADD COLUMN source TEXT DEFAULT 'LOCAL'");
+            }
           }
         });
         createDefaultAdmin();
@@ -76,6 +82,28 @@ function initializeTables() {
       if (err) console.error("Error creating settings table:", err);
       else initializeSettings();
     });
+
+    // 4. Auth Logs Table
+    db.run(`CREATE TABLE IF NOT EXISTS auth_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT,
+      event_type TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // 5. Audit Logs Table
+    db.run(`CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT,
+      action TEXT,
+      entity_type TEXT,
+      entity_id TEXT,
+      old_value TEXT,
+      new_value TEXT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
   });
 }
 

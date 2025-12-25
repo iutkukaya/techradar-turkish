@@ -6,10 +6,20 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const fs = require('fs');
 const db = require('./database');
+const ldapService = require('./ldapService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SECRET_KEY = 'your-secret-key-change-this-in-prod';
+const { logger, reconfigureSyslog, logAuth, logAudit } = require('./logger');
+
+// Initialize Syslog on start (Syslog ayarlarını yükle)
+db.all("SELECT * FROM settings", (err, rows) => {
+    if (rows) {
+        const settings = rows.reduce((acc, row) => ({ ...acc, [row.key]: row.value }), {});
+        reconfigureSyslog(settings);
+    }
+});
 
 // Middleware
 app.use(cors());
@@ -43,6 +53,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Auth Routes
+// Auth Routes
 app.post('/api/auth/login', (req, res) => {
     const { username, password } = req.body;
 
@@ -50,15 +61,141 @@ app.post('/api/auth/login', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
-        bcrypt.compare(password, user.password, (err, result) => {
-            if (result) {
-                // Token expires in 10 minutes
-                const token = jwt.sign({ id: user.id, username: user.username, permissions: user.permissions }, SECRET_KEY, { expiresIn: '10m' });
-                res.json({ token, permissions: user.permissions });
-            } else {
-                res.status(401).json({ message: 'Invalid credentials' });
-            }
+        const issueToken = () => {
+            const token = jwt.sign({ id: user.id, username: user.username, permissions: user.permissions }, SECRET_KEY, { expiresIn: '10m' });
+            res.json({ token, permissions: user.permissions });
+        };
+
+        if (user.source === 'LDAP') {
+            // LDAP Authentication
+            db.get("SELECT value FROM settings WHERE key = 'ldap_config'", [], (err, row) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                let ldapConfig = null;
+                try {
+                    ldapConfig = row && row.value ? JSON.parse(row.value) : null;
+                } catch (e) {
+                    console.error("LDAP Config Parse Error", e);
+                }
+
+                if (!ldapConfig || !ldapConfig.isActive) {
+                    return res.status(401).json({ message: 'LDAP authentication is disabled or not configured' });
+                }
+
+                ldapService.authenticate(ldapConfig, username, password)
+                    .then(() => issueToken())
+                    .catch((err) => {
+                        console.error("LDAP Login Failed", err);
+                        res.status(401).json({ message: 'Invalid credentials (LDAP)' });
+                    });
+            });
+        } else {
+            // Local Authentication
+            bcrypt.compare(password, user.password, (err, result) => {
+                if (result) {
+                    logAuth(username, 'LOGIN_SUCCESS', req); // Log success
+                    issueToken();
+                } else {
+                    logAuth(username, 'LOGIN_FAIL', req); // Log fail
+                    res.status(401).json({ message: 'Invalid credentials' });
+                }
+            });
+        }
+    });
+});
+
+// Settings Routes (Updated with Diff Logic)
+app.put('/api/settings', authenticateToken, checkAdmin, async (req, res) => {
+    const updates = req.body;
+
+    const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
+        db.run(sql, params, function (err) {
+            if (err) reject(err);
+            else resolve(this);
         });
+    });
+
+    const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+        });
+    });
+
+    try {
+        const rows = await dbAll("SELECT key, value FROM settings");
+        const oldSettings = rows.reduce((acc, r) => ({ ...acc, [r.key]: r.value }), {});
+
+        await dbRun("BEGIN TRANSACTION");
+
+        let syslogChanged = false;
+
+        // Calculate Diff
+        const changedSettings = {};
+        const oldValuesForDiff = {};
+
+        for (const [key, value] of Object.entries(updates)) {
+            // Only update if value is different (simple string comparison)
+            if (oldSettings[key] !== value) {
+                await dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", [key, value]);
+                if (key.startsWith('syslog_')) syslogChanged = true;
+
+                changedSettings[key] = value;
+                oldValuesForDiff[key] = oldSettings[key];
+            }
+        }
+
+        await dbRun("COMMIT");
+
+        try {
+            // Only log if something actually changed
+            if (Object.keys(changedSettings).length > 0) {
+                logAudit(req.user.username, 'UPDATE', 'SETTINGS', 'Global', oldValuesForDiff, changedSettings);
+            }
+
+            if (syslogChanged) {
+                const newRows = await dbAll("SELECT key, value FROM settings");
+                const newSettings = newRows.reduce((acc, r) => ({ ...acc, [r.key]: r.value }), {});
+                reconfigureSyslog(newSettings);
+            }
+        } catch (logErr) {
+            console.error('Logging/Syslog error (non-fatal):', logErr);
+        }
+
+        res.json({ message: 'Settings updated successfully' });
+
+    } catch (error) {
+        console.error('Settings update error, rolling back:', error);
+        try { await dbRun("ROLLBACK"); } catch (e) { }
+        res.status(500).json({ error: error.message });
+    }
+});
+app.post('/api/settings/ldap/test', authenticateToken, checkAdmin, (req, res) => {
+    const config = req.body;
+    ldapService.testConnection(config)
+        .then(() => res.json({ success: true, message: 'Connection successful' }))
+        .catch(err => res.status(400).json({ success: false, message: 'Connection failed', error: err.message }));
+});
+
+app.post('/api/ldap/users', authenticateToken, checkAdmin, (req, res) => {
+    const { query } = req.body;
+
+    // Fetch config from DB
+    db.get("SELECT value FROM settings WHERE key = 'ldap_config'", [], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        let ldapConfig = null;
+        try {
+            ldapConfig = row && row.value ? JSON.parse(row.value) : null;
+        } catch (e) {
+            return res.status(500).json({ error: 'Invalid LDAP Configuration' });
+        }
+
+        if (!ldapConfig) return res.status(400).json({ message: 'LDAP not configured' });
+
+        ldapService.searchUsers(ldapConfig, query)
+            .then(users => res.json(users))
+            .catch(err => res.status(500).json({ error: err.message }));
     });
 });
 
@@ -70,6 +207,22 @@ app.post('/api/auth/refresh', authenticateToken, (req, res) => {
     res.json({ token });
 });
 
+// Logout Endpoint (Logging only)
+app.post('/api/auth/logout', (req, res) => {
+    const authHeader = req.headers['authorization'];
+    let username = 'anonymous';
+    if (authHeader) {
+        try {
+            const token = authHeader.split(' ')[1];
+            // Verify but ignore expiry for logging purposes if needed, or just decode
+            const decoded = jwt.decode(token);
+            if (decoded) username = decoded.username;
+        } catch (e) { }
+    }
+    logAuth(username, 'LOGOUT', req);
+    res.json({ message: 'Logged out' });
+});
+
 // User Management Routes (Admin Only)
 app.get('/api/users', authenticateToken, checkAdmin, (req, res) => {
     db.all('SELECT id, username, permissions FROM users', [], (err, rows) => {
@@ -79,18 +232,28 @@ app.get('/api/users', authenticateToken, checkAdmin, (req, res) => {
 });
 
 app.post('/api/users', authenticateToken, checkAdmin, (req, res) => {
-    const { username, password, permissions } = req.body;
+    const { username, password, permissions, source } = req.body;
     const saltRounds = 10;
+    const userSource = source || 'LOCAL';
 
-    bcrypt.hash(password, saltRounds, (err, hash) => {
-        if (err) return res.status(500).json({ error: err.message });
-
-        const sql = `INSERT INTO users (username, password, permissions) VALUES (?, ?, ?)`;
-        db.run(sql, [username, hash, permissions], function (err) {
+    if (userSource === 'LDAP') {
+        const dummyPassword = 'LDAP_USER_NO_PASSWORD'; // Placeholder
+        const sql = `INSERT INTO users (username, password, permissions, source) VALUES (?, ?, ?, ?)`;
+        db.run(sql, [username, dummyPassword, permissions, 'LDAP'], function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID, username, permissions });
+            res.json({ id: this.lastID, username, permissions, source: 'LDAP' });
         });
-    });
+    } else {
+        bcrypt.hash(password, saltRounds, (err, hash) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const sql = `INSERT INTO users (username, password, permissions, source) VALUES (?, ?, ?, ?)`;
+            db.run(sql, [username, hash, permissions, 'LOCAL'], function (err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ id: this.lastID, username, permissions, source: 'LOCAL' });
+            });
+        });
+    }
 });
 
 app.delete('/api/users/:id', authenticateToken, checkAdmin, (req, res) => {
@@ -299,24 +462,65 @@ app.get('/api/settings', (req, res) => {
     });
 });
 
-app.put('/api/settings', authenticateToken, checkAdmin, (req, res) => {
+app.put('/api/settings', authenticateToken, checkAdmin, async (req, res) => {
     const updates = req.body;
-    const stmt = db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
 
-    db.serialize(() => {
-        db.run("BEGIN TRANSACTION");
-        try {
-            Object.entries(updates).forEach(([key, value]) => {
-                stmt.run(key, value);
-            });
-            db.run("COMMIT");
-            stmt.finalize();
-            res.json({ message: 'Settings updated successfully' });
-        } catch (error) {
-            db.run("ROLLBACK");
-            res.status(500).json({ error: error.message });
-        }
+    // Helper for async db operations
+    const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
+        db.run(sql, params, function (err) {
+            if (err) reject(err);
+            else resolve(this);
+        });
     });
+
+    const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+        });
+    });
+
+    try {
+        // Fetch old settings
+        const rows = await dbAll("SELECT key, value FROM settings");
+        const oldSettings = rows.reduce((acc, r) => ({ ...acc, [r.key]: r.value }), {});
+
+        await dbRun("BEGIN TRANSACTION");
+
+        let syslogChanged = false;
+
+        // Use a loop with await to ensure sequential execution
+        for (const [key, value] of Object.entries(updates)) {
+            await dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", [key, value]);
+            if (key.startsWith('syslog_')) syslogChanged = true;
+        }
+
+        await dbRun("COMMIT");
+
+        // Logging and Syslog Reconfiguration (Safe to do after commit)
+        try {
+            logAudit(req.user.username, 'UPDATE', 'SETTINGS', 'Global', oldSettings, updates);
+
+            if (syslogChanged) {
+                const newRows = await dbAll("SELECT key, value FROM settings");
+                const newSettings = newRows.reduce((acc, r) => ({ ...acc, [r.key]: r.value }), {});
+                reconfigureSyslog(newSettings);
+            }
+        } catch (logErr) {
+            console.error('Logging/Syslog error (non-fatal):', logErr);
+        }
+
+        res.json({ message: 'Settings updated successfully' });
+
+    } catch (error) {
+        console.error('Settings update error, rolling back:', error);
+        try {
+            await dbRun("ROLLBACK");
+        } catch (rollbackErr) {
+            console.error('Rollback failed:', rollbackErr);
+        }
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Serve Static Files (Frontend)

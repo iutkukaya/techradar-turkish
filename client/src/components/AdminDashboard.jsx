@@ -32,6 +32,23 @@ const AdminDashboard = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [passwordChange, setPasswordChange] = useState({ current: '', new: '' });
 
+    // LDAP State
+    const [ldapConfig, setLdapConfig] = useState({
+        configName: '',
+        isActive: false,
+        url: '',
+        port: '389',
+        baseDn: '',
+        bindDn: '',
+        bindPassword: '',
+        searchFilter: '(sAMAccountName={{username}})',
+        notes: ''
+    });
+    const [showLdapImportModal, setShowLdapImportModal] = useState(false);
+    const [ldapSearchQuery, setLdapSearchQuery] = useState('');
+    const [ldapSearchResults, setLdapSearchResults] = useState([]);
+    const [ldapImportLoading, setLdapImportLoading] = useState(false);
+
     const navigate = useNavigate();
 
     const quadrants = [
@@ -56,7 +73,20 @@ const AdminDashboard = () => {
     useEffect(() => {
         fetchTechnologies();
         fetchSettings();
+    }, []);
 
+    useEffect(() => {
+        if (settings.ldap_config) {
+            try {
+                const parsed = JSON.parse(settings.ldap_config);
+                setLdapConfig(parsed);
+            } catch (e) {
+                console.error("Failed to parse LDAP config", e);
+            }
+        }
+    }, [settings]);
+
+    useEffect(() => {
         const token = localStorage.getItem('token');
         if (token) {
             try {
@@ -104,7 +134,18 @@ const AdminDashboard = () => {
             .catch(err => console.error('Error fetching settings:', err));
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (err) {
+                console.error("Logout log failed", err);
+            }
+        }
         localStorage.removeItem('token');
         navigate('/login');
     };
@@ -318,6 +359,118 @@ const AdminDashboard = () => {
         }
     };
 
+    // LDAP Handlers
+    const handleLdapConfigChange = (key, value) => {
+        setLdapConfig(prev => ({ ...prev, [key]: value }));
+    };
+
+    const saveLdapSettings = async () => {
+        const token = localStorage.getItem('token');
+        // Merge with existing settings but update ldap_config key
+        const newSettings = { ...settings, ldap_config: JSON.stringify(ldapConfig) };
+        try {
+            const response = await fetch('/api/settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(newSettings)
+            });
+            if (response.ok) {
+                alert('LDAP Ayarları kaydedildi!');
+                handleSettingChange('ldap_config', JSON.stringify(ldapConfig)); // Update local settings state
+            } else {
+                alert('Ayarlar kaydedilemedi.');
+            }
+        } catch (error) {
+            console.error('Error saving LDAP settings:', error);
+        }
+    };
+
+    const testLdapConnection = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const response = await fetch('/api/settings/ldap/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(ldapConfig)
+            });
+            const data = await response.json();
+            alert(data.message);
+        } catch (error) {
+            alert('Bağlantı testi başarısız.');
+        }
+    };
+
+    const searchLdapUsers = async () => {
+        if (!ldapSearchQuery) return;
+        setLdapImportLoading(true);
+        const token = localStorage.getItem('token');
+        try {
+            const response = await fetch('/api/ldap/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ query: ldapSearchQuery })
+            }); //
+            if (response.ok) {
+                const data = await response.json();
+                setLdapSearchResults(data);
+            } else {
+                alert('Arama başarısız.');
+            }
+        } catch (error) {
+            console.error("LDAP Search Error", error);
+        } finally {
+            setLdapImportLoading(false);
+        }
+    };
+
+    const importLdapUser = async (ldapUser) => {
+        const token = localStorage.getItem('token');
+        // Map LDAP attributes to our user structure
+        // Prefer sAMAccountName (AD), fallback to uid (OpenLDAP/Linux)
+        const username = ldapUser.sAMAccountName || ldapUser.uid;
+
+        if (!username) {
+            alert('Kullanıcı adı (sAMAccountName veya uid) bulunamadı!');
+            return;
+        }
+
+        const userData = {
+            username: username,
+            password: 'dummy_password', // Not used
+            permissions: 'READ_ONLY', // Default permission
+            source: 'LDAP'
+        };
+
+        try {
+            const response = await fetch('/api/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(userData)
+            });
+            if (response.ok) {
+                alert(`${userData.username} başarıyla içe aktarıldı!`);
+                fetchUsers();
+            } else {
+                const err = await response.json();
+                alert(`Hata: ${err.message || 'İçe aktarma başarısız'}`);
+            }
+        } catch (error) {
+            console.error('Error importing user:', error);
+        }
+    };
+
     const isAdmin = currentUser.permissions === 'ADMIN';
 
     return (
@@ -429,9 +582,14 @@ const AdminDashboard = () => {
                 <div className="glass" style={{ padding: '1.5rem', borderRadius: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                         <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Kullanıcı Yönetimi</h2>
-                        <button onClick={() => { setEditingUser(null); setShowUserModal(true); }} className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>
-                            + Yeni Kullanıcı
-                        </button>
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button onClick={() => { setShowLdapImportModal(true); setLdapSearchResults([]); setLdapSearchQuery(''); }} className="btn glass" style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8' }}>
+                                ☁ LDAP'tan Ekle
+                            </button>
+                            <button onClick={() => { setEditingUser(null); setShowUserModal(true); }} className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>
+                                + Yeni Kullanıcı
+                            </button>
+                        </div>
                     </div>
 
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -676,6 +834,114 @@ const AdminDashboard = () => {
                         </div>
                     </div>
 
+                    {/* LDAP Settings */}
+                    <div style={{ gridColumn: '1 / -1', marginTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '2rem' }}>
+                        <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            LDAP Entegrasyonu (Active Directory)
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={ldapConfig.isActive}
+                                    onChange={e => handleLdapConfigChange('isActive', e.target.checked)}
+                                />
+                                Aktif
+                            </label>
+                        </h3>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Bağlantı Adı</label>
+                                <input className="input glass" style={{ width: '100%' }} value={ldapConfig.configName} onChange={e => handleLdapConfigChange('configName', e.target.value)} placeholder="Örn: Kurumsal AD" />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Port</label>
+                                <input className="input glass" style={{ width: '100%' }} value={ldapConfig.port} onChange={e => handleLdapConfigChange('port', e.target.value)} placeholder="389 veya 636" />
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Sunucu URL</label>
+                                <input className="input glass" style={{ width: '100%' }} value={ldapConfig.url} onChange={e => handleLdapConfigChange('url', e.target.value)} placeholder="ldap://dc.sirket.local veya ldaps://..." />
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Base DN</label>
+                                <input className="input glass" style={{ width: '100%' }} value={ldapConfig.baseDn} onChange={e => handleLdapConfigChange('baseDn', e.target.value)} placeholder="dc=sirket,dc=local" />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Bind DN (Kullanıcı Adı)</label>
+                                <input className="input glass" style={{ width: '100%' }} value={ldapConfig.bindDn} onChange={e => handleLdapConfigChange('bindDn', e.target.value)} placeholder="cn=service,ou=users..." />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Bind Password</label>
+                                <input type="password" className="input glass" style={{ width: '100%' }} value={ldapConfig.bindPassword} onChange={e => handleLdapConfigChange('bindPassword', e.target.value)} />
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Arama Filtresi</label>
+                                <input className="input glass" style={{ width: '100%' }} value={ldapConfig.searchFilter} onChange={e => handleLdapConfigChange('searchFilter', e.target.value)} placeholder="(sAMAccountName={{username}})" />
+                                <small style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{'{{username}}'} aranacak ismin yerine geçer.</small>
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Notlar</label>
+                                <textarea className="input glass" style={{ width: '100%', minHeight: '60px' }} value={ldapConfig.notes} onChange={e => handleLdapConfigChange('notes', e.target.value)} />
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                            <button onClick={testLdapConnection} className="btn glass" style={{ flex: 1 }}>Bağlantıyı Test Et</button>
+                            <button onClick={saveLdapSettings} className="btn glass" style={{ flex: 1, background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8' }}>LDAP Ayarlarını Kaydet</button>
+                        </div>
+                    </div>
+
+                    {/* Syslog Settings */}
+                    <div style={{ gridColumn: '1 / -1', marginTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '2rem' }}>
+                        <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            Loglama Ayarları (Syslog)
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.syslog_enabled === 'true'}
+                                    onChange={e => handleSettingChange('syslog_enabled', e.target.checked ? 'true' : 'false')}
+                                />
+                                Aktif
+                            </label>
+                        </h3>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Sunucu Host / IP</label>
+                                <input
+                                    className="input glass"
+                                    style={{ width: '100%' }}
+                                    value={settings.syslog_host || ''}
+                                    onChange={(e) => handleSettingChange('syslog_host', e.target.value)}
+                                    placeholder="örn: 192.168.1.50"
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Port</label>
+                                <input
+                                    type="number"
+                                    className="input glass"
+                                    style={{ width: '100%' }}
+                                    value={settings.syslog_port || '514'}
+                                    onChange={(e) => handleSettingChange('syslog_port', e.target.value)}
+                                    placeholder="514"
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Protokol</label>
+                                <select
+                                    className="input glass"
+                                    style={{ width: '100%' }}
+                                    value={settings.syslog_protocol || 'udp4'}
+                                    onChange={(e) => handleSettingChange('syslog_protocol', e.target.value)}
+                                >
+                                    <option value="udp4">UDP</option>
+                                    <option value="tcp4">TCP</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     <button
                         onClick={saveSettings}
                         className="btn glass"
@@ -779,6 +1045,68 @@ const AdminDashboard = () => {
                                     <button type="submit" className="btn glass" style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>Kaydet</button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                showLdapImportModal && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+                        <div className="glass" style={{ padding: '2rem', borderRadius: '1rem', width: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>LDAP'tan Kullanıcı İçe Aktar</h2>
+
+                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                                <input
+                                    className="input glass"
+                                    style={{ flex: 1 }}
+                                    placeholder="Kullanıcı Adı veya İsim Ara..."
+                                    value={ldapSearchQuery}
+                                    onChange={e => setLdapSearchQuery(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && searchLdapUsers()}
+                                />
+                                <button onClick={searchLdapUsers} className="btn glass" disabled={ldapImportLoading}>
+                                    {ldapImportLoading ? 'Aranıyor...' : 'Ara'}
+                                </button>
+                            </div>
+
+                            <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.5rem' }}>
+                                {ldapSearchResults.length === 0 ? (
+                                    <div style={{ padding: '1rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>Sonuç bulunamadı.</div>
+                                ) : (
+                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'left' }}>
+                                                <th style={{ padding: '0.75rem', fontSize: '0.8rem' }}>Hesap</th>
+                                                <th style={{ padding: '0.75rem', fontSize: '0.8rem' }}>İsim</th>
+                                                <th style={{ padding: '0.75rem', fontSize: '0.8rem' }}>E-posta</th>
+                                                <th style={{ padding: '0.75rem', fontSize: '0.8rem' }}>İşlem</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {ldapSearchResults.map(u => (
+                                                <tr key={u.dn || u.sAMAccountName || u.uid} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.9rem' }}>{u.sAMAccountName || u.uid}</td>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.9rem' }}>{u.displayName || u.cn}</td>
+                                                    <td style={{ padding: '0.75rem', fontSize: '0.9rem' }}>{u.mail}</td>
+                                                    <td style={{ padding: '0.75rem' }}>
+                                                        <button
+                                                            onClick={() => importLdapUser(u)}
+                                                            className="btn glass"
+                                                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>
+                                                            Ekle
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                <button onClick={() => setShowLdapImportModal(false)} className="btn glass" style={{ borderColor: 'var(--ring-exit)', color: 'var(--ring-exit)' }}>Kapat</button>
+                            </div>
                         </div>
                     </div>
                 )
