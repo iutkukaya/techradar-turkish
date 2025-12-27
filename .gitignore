@@ -39,3 +39,6 @@ server/radar.db
 
 # OS generated files
 Thumbs.db
+
+# Release Artifacts
+release/

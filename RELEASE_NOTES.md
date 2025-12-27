@@ -12,6 +12,7 @@
 
 ## 📚 Dokümantasyon (Documentation)
 - `docs/ADMIN_GUIDE_TR.md` ve `docs/ADMIN_GUIDE_EN.md` dosyaları eklendi. LDAP ve Loglama ayarları detaylandırıldı. (Added `docs/ADMIN_GUIDE_TR.md` and `docs/ADMIN_GUIDE_EN.md`. Detailed LDAP and Logging configurations.)
+- `docs/MIMARI_VE_DIYAGRAMLAR.md` ve `docs/ARCHITECTURE_AND_DIAGRAMS.md` eklendi. ERD, C4 Konteyner, Akış ve Modül diyagramlarını içerir. (Added `docs/MIMARI_VE_DIYAGRAMLAR.md` and `docs/ARCHITECTURE_AND_DIAGRAMS.md`. Includes ERD, C4 Container, Sequence, and Module diagrams.)
 
 
 ---
